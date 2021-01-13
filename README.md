@@ -27,3 +27,12 @@ So far the dashboard is divided into four tabs: **summary**, **inputs**, **plots
     + Update (10/01/2021): Added "compare to another country" function to the second plot. It will now show a comparison of two countries should the user select that.
     + Update (09/01/2020): Added the summary plot again. Added a second plot showing the percent difference in death probability of a given period compared to the previous period. The dashed line represents no change (0%). Everything below is a reduction, Everything above is an increase. The year 2000 is not shown, because it is the earliest period in the dataset.
 * **Maps** will include a bigger map.
+
+# 2. File descriptions
+
+* **who_2020_data/** folder contains all the filtered and raw data used by the dashboard.
+* **who_cdcc_map.r** contains the code used for the map that is included on the "summary" tab.
+* **who_dashboard.r** is the main script thats run to create the app. It contains the code used to build the header, sidebar and body of the dashboard. All inputs and outputs are included. It sources some objects from *who_objects.r*.
+* **who_filtered_data.r** shows how I filtered the data found in the *who_2020_data/* folder.
+* **who_objects.r** contains some R objects that are sourced by the main app script.
+* **who_test_plots.r** contains explanations on how I built the plots in the app.
