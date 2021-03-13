@@ -14,8 +14,15 @@ theme_bigfont <- theme(plot.title = element_text(size=16),
                        legend.title = element_text(size = 15),
                        legend.text = element_text(size = 14))
 
+theme_plotlyfont <- theme(plot.title = element_text(size=10),
+                       axis.text.x= element_text(size=9),
+                       axis.text.y= element_text(size=9), 
+                       axis.title=element_text(size=10),
+                       legend.title = element_text(size = 10),
+                       legend.text = element_text(size = 9))
+
 # load data
-cdcc_deathprob <- read_csv("who_2020_data/cancer_filtered.csv") %>% select(-X1)
+cdcc_deathprob <- read_csv("who_2020_data/cdcc_filtered.csv") %>% select(-X1)
 # undeployed
 doctors <- read_csv("who_2020_data/doctors_filtered.csv") %>% select(-X1)
 nurses <- read_csv("who_2020_data/nurses_filtered.csv") %>% select(-X1)
@@ -48,7 +55,9 @@ cdcc_deathprob <- cdcc_deathprob %>%
                            "United Kingdom of Great Britain and Northern Ireland" = "United Kingdom",
                            "United States of America" = "United States",
                            "Venezuela (Bolivarian Republic of)" = "Venezuela",
-                           "Bolivia (Plurinational State of)" = "Bolivia"))
+                           "Bolivia (Plurinational State of)" = "Bolivia")) %>%
+  group_by(year) %>%
+  mutate(avg_prob = round(mean(percent), 1))
 
 # load world map shapefile
 data("wrld_simpl")
@@ -67,6 +76,7 @@ wrld_simpl@data <- new_country_names
 
 # mean difference between year 2016 and 2000 which will be used in an infobox
 mean_decrease <- cdcc_deathprob %>%
+  select(-avg_prob) %>%
   filter(year %in% c(2000, 2016)) %>%
   pivot_wider(names_from = year, values_from = percent) %>%
   mutate(diff = `2016` - `2000`) %>%

@@ -6,8 +6,10 @@
 # load libraries
 library(tidyverse) # data manipulation
 library(shiny) # shiny apps, reactives, inputs, outputs
+library(shinydashboardPlus) # fancy boxes
 library(shinydashboard) # dashboard package
 library(ggplot2) # data viz
+library(plotly) # data viz, interactive plots
 library(ggnewscale) # data viz
 library(scales) # plot scales
 library(DT) # interactive datatables
@@ -49,9 +51,9 @@ sidebar <- dashboardSidebar(
     ),
     # maps tab
     menuItem(
-      text = "Maps",
-      tabName = "maps",
-      icon = icon("globe-africa")
+      text = "About creator",
+      tabName = "creator",
+      icon = icon("user")
     ),
     # select country input
     selectInput(
@@ -138,7 +140,9 @@ body <- dashboardBody(
             # split up by sex
             # if "compare countries" is selected, then it shows both countries at once and the legend is labelled
             # according to the country name
-            plotOutput("cdcc_plot_summary"), 
+            plotOutput("cdcc_plot_summary"),
+            footer = HTML("The dashed line represents the average probability to die from CDCC<br>
+                          diseases across all countries and sexes in a given year"),
             status = "danger"
           )
         ),
@@ -200,10 +204,22 @@ body <- dashboardBody(
       fluidRow(
         box(
           width = 6,
+          title = uiOutput("country1_title"),
           # see "summary" tab above
-          plotOutput("cdcc_plot_plots"),
-          status = "danger"
+          plotlyOutput("cdcc_plot_plots_first_country"),
+          status = "danger",
+          solidHeader = TRUE
         ), 
+        box(
+          width = 6,
+          title = uiOutput("country2_title"),
+          # see summary tab above
+          plotlyOutput("cdcc_plot_plots_second_country"),
+          status = "danger",
+          solidHeader = TRUE
+        )
+      ),
+      fluidRow(
         box(
           width = 6,
           # dynamic plot output showing the difference in mean probability of cdcc death of a current year 
@@ -215,9 +231,29 @@ body <- dashboardBody(
         )
       )
     ),
-    ## maps
+    ## creator
     tabItem(
-      tabName = "maps"
+      tabName = "creator",
+      fluidRow(
+        userBox(
+          width = 12,
+          title = userDescription(
+            title = "Sascha Remy Brunner",
+            subtitle = "Bioinformatician / Data Analyst",
+            type = 1,
+            image = "https://storage.googleapis.com/kaggle-avatars/images/5878132-kg.JPG",
+            backgroundImage = "https://biology.mit.edu/wp-content/uploads/2017/12/MIT-Inhibitor-Model_Credit_MIT-News.jpeg"
+          ),
+          br(),
+          descriptionBlock(
+            header = "About",
+            text = HTML("MSc Marine Biology with a focus on Big Data Analysis (Genomics).<br>
+                        I like to tackle complex data problems using Unix/Linux and R.<br>
+                        I use shinydashboard to convey stories through data.")
+          ),
+          background = "navy"
+        )
+      )
     )
   )
 )
@@ -366,7 +402,7 @@ server <- function(input, output, session) {
    )
    
  })
- 
+
  # infobox deadliest country for males in a selected year
  output$deadliest_country_male_year <- renderInfoBox({
    
@@ -431,6 +467,56 @@ server <- function(input, output, session) {
                        lat2 = min(wrld_simpl@data$LAT) - 10)
    
  })
+ 
+ # comparison plot
+ output$cdcc_plot_summary <- renderPlot({
+   
+   # conditional reactives triggering based on "compare countries" checkbox input
+   if (input$compare_countries == FALSE) {
+     # plot filter reactive & plot title reactive, country 1
+     cdcc_deathprob <- filter_plot_react()
+   } else {
+     # country 1
+     cdcc_deathprob <- filter_plot_react()
+     # country 2
+     cdcc_deathprob_country_2 <- filter_plot_react_2()
+   }
+   
+   # actual base plot
+   p <- cdcc_deathprob %>%
+     ggplot(aes(x = year, y = percent, color = sex)) +
+     geom_line(lwd = 1) +
+     geom_point(size = 4) +
+     geom_line(aes(y = avg_prob), lty = "dashed", lwd = 1) +
+     scale_color_manual(values = wes_palette("Moonrise2")[c(1,2,4)]) +
+     scale_x_continuous(breaks = c(2000, 2005, 2010, 2015, 2016)) +
+     theme_light() +
+     theme_bigfont
+   
+   # conditional addition of layers to the plot based on "compare countries" checkbox input
+   if (input$compare_countries == FALSE) {
+     p +
+       labs(title = paste0("Probability of dying from CDCC diseases between age 30 - 70 in ", input$location),
+            x = "Year",
+            y = "Probability to die from CDCC diseases (%)",
+            color = "Sex")
+   } else {
+     p + 
+       labs(color = paste0(input$location)) +
+       # second country
+       new_scale_color() +
+       geom_line(data = cdcc_deathprob_country_2, aes(x = year, y = percent, color = sex), lwd = 1) +
+       geom_point(data = cdcc_deathprob_country_2, aes(x = year, y = percent, color = sex), 
+                  size = 4,
+                  shape = 17) +
+       scale_color_manual(values = wes_palette("FantasticFox1")[c(3,4,5)]) +
+       labs(title = paste0("Probability of dying from CDCC diseases between age 30 - 70 in ", 
+                           input$location, " vs. ", input$location_2),
+            x = "Year",
+            y = "Probability to die from CDCC diseases (%)",
+            color = input$location_2)
+   }
+ })
 
  ## observers
  # tip notification shown upon visiting the application for 10sec
@@ -487,8 +573,8 @@ server <- function(input, output, session) {
    
    datatable(cdcc_deathprob,
              rownames = FALSE,
-             colnames = c('Country', 'Year', 'Indicator', 'Sex', 'Probability (%)'), 
-             options = list(pageLength = 7))
+             colnames = c('Country', 'Year', 'Indicator', 'Sex', 'Probability (%)', 'Avg. Prob per year (%)'), 
+             options = list(pageLength = 5))
    
  )
  
@@ -505,53 +591,73 @@ server <- function(input, output, session) {
   ### in plots
  
  ## time series plot
-  output$cdcc_plot_summary <- output$cdcc_plot_plots <- renderPlot({
+  output$cdcc_plot_plots_first_country <- renderPlotly({
     
-    # conditional reactives triggering based on "compare countries" checkbox input
-    if (input$compare_countries == FALSE) {
-      # plot filter reactive & plot title reactive, country 1
-      cdcc_deathprob <- filter_plot_react()
-    } else {
-      # country 1
-      cdcc_deathprob <- filter_plot_react()
-      # country 2
-      cdcc_deathprob_country_2 <- filter_plot_react_2()
-    }
+    # plot filter reactive & plot title reactive, country 1
+    cdcc_deathprob <- filter_plot_react()
     
     # actual base plot
     p <- cdcc_deathprob %>%
       ggplot(aes(x = year, y = percent, color = sex)) +
-      geom_line(lwd = 1) +
-      geom_point(size = 4) +
+      geom_line(lwd = 0.5) +
+      geom_line(aes(y = avg_prob), lty = "dashed", lwd = 0.5) +
+      geom_point(size = 2) +
+      annotate("segment", x = 2010, xend = 2011, y = 20.25, yend = 23.25,
+               colour = "black") +
+      annotate("text", x = 2008, y = 23.5, 
+               label = "Avg. probability across all countries (both sexes)") +
       scale_color_manual(values = wes_palette("Moonrise2")[c(1,2,4)]) +
       scale_x_continuous(breaks = c(2000, 2005, 2010, 2015, 2016)) +
+      labs(x = "Year",
+           y = "Probability to die from CDCC diseases (%)",
+           color = "Sex") +
       theme_light() +
-      theme_bigfont
+      theme_plotlyfont
     
-    # conditional addition of layers to the plot based on "compare countries" checkbox input
-    if (input$compare_countries == FALSE) {
-      p +
-        labs(title = paste0("Probability of dying from CDCC diseases between age 30 - 70 in ", input$location),
-             x = "Year",
-             y = "Probability to die from CDCC diseases (%)",
-             color = "Sex")
-    } else {
-      p + 
-        labs(color = paste0(input$location)) +
-        # second country
-        new_scale_color() +
-        geom_line(data = cdcc_deathprob_country_2, aes(x = year, y = percent, color = sex), lwd = 1) +
-        geom_point(data = cdcc_deathprob_country_2, aes(x = year, y = percent, color = sex), 
-                   size = 4,
-                   shape = 17) +
-        scale_color_manual(values = wes_palette("FantasticFox1")[c(3,4,5)]) +
-        labs(title = paste0("Probability of dying from CDCC diseases between age 30 - 70 in ", 
-                            input$location, " vs. ", input$location_2),
-             x = "Year",
-             y = "Probability to die from CDCC diseases (%)",
-             color = input$location_2)
-    }
+    ggplotly(p)
   })
+  
+  # dynamic plot title output
+  output$country1_title <- renderPrint({
+    
+    HTML(cat("Probability to die from CDCC diseases in", input$location))
+    
+  })
+  
+  # second country
+  output$cdcc_plot_plots_second_country <- renderPlotly({
+    
+    # plot filter reactive & plot title reactive, country 2
+    cdcc_deathprob_country_2 <- filter_plot_react_2()
+    
+    # actual base plot
+    p <- cdcc_deathprob_country_2 %>%
+      ggplot(aes(x = year, y = percent, color = sex)) +
+      geom_line(lwd = 0.5) +
+      geom_line(aes(y = avg_prob), lty = "dashed", lwd = 0.5) +
+      geom_point(size = 2) +
+      annotate("segment", x = 2010, xend = 2011, y = 20.25, yend = 23.25,
+               colour = "black") +
+      annotate("text", x = 2008, y = 23.5, 
+               label = "Avg. probability across all countries (both sexes)") +
+      scale_color_manual(values = wes_palette("Moonrise2")[c(1,2,4)]) +
+      scale_x_continuous(breaks = c(2000, 2005, 2010, 2015, 2016)) +
+      labs(x = "Year",
+           y = "Probability to die from CDCC diseases (%)",
+           color = "Sex") +
+      theme_light() +
+      theme_plotlyfont
+    
+    ggplotly(p)
+  })
+  
+  # dynamic plot title output
+  output$country2_title <- renderPrint({
+    
+    HTML(cat("Probability to die from CDCC diseases in", input$location_2))
+    
+  })
+  
   ## time series difference plot
   output$cdcc_plot_difference <- renderPlot({
     
