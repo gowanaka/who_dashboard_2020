@@ -26,7 +26,7 @@ So far the dashboard is divided into four tabs: **summary**, **inputs**, **plots
 * **Plots** is populated with plots.
     + Update (10/01/2021): Added "compare to another country" function to the second plot. It will now show a comparison of two countries should the user select that.
     + Update (09/01/2020): Added the summary plot again. Added a second plot showing the percent difference in death probability of a given period compared to the previous period. The dashed line represents no change (0%). Everything below is a reduction, Everything above is an increase. The year 2000 is not shown, because it is the earliest period in the dataset.
-* **Maps** will include a bigger map.
+* **Creator** includes a short description about me with picture.
 
 # 2. File descriptions
 
